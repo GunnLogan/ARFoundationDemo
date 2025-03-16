@@ -4,8 +4,9 @@ using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using TMPro;
 
-public class ARCubeSpawner : MonoBehaviour
+public class MeasurementRaycastSpawner : MonoBehaviour
 {
+
     [Header("References")]
     // Assign your cube prefab in the inspector
     public GameObject cubePrefab;
@@ -13,8 +14,6 @@ public class ARCubeSpawner : MonoBehaviour
     public ARRaycastManager raycastManager;
     // TMP_Text element to display the measured distance
     public TMP_Text distanceText;
-    // Reference to the Line Renderer used to draw a line between cubes
-    public LineRenderer lineRenderer;
 
     // List to keep track of spawned cubes (we only allow two at a time)
     private List<GameObject> cubes = new List<GameObject>();
@@ -22,42 +21,55 @@ public class ARCubeSpawner : MonoBehaviour
     // A reusable list for storing raycast hit results
     static List<ARRaycastHit> hits = new List<ARRaycastHit>();
 
+    // Reference to the instantiated Line Renderer (instantiated once both cubes are in the scene)
+    private LineRenderer lineRenderer;
+
     void Update()
     {
-        // Only process touches if there is at least one and we haven’t already spawned two cubes
+        // Process screen touches if we haven't already spawned two cubes.
         if (Input.touchCount > 0 && cubes.Count < 2)
         {
             Touch touch = Input.GetTouch(0);
             if (touch.phase == TouchPhase.Began)
             {
                 Vector2 touchPosition = touch.position;
-                // Perform an AR raycast from the touch position against detected planes
+                // Perform an AR raycast from the touch position against detected planes.
                 if (raycastManager.Raycast(touchPosition, hits, TrackableType.PlaneWithinPolygon))
                 {
-                    // Get the pose (position and rotation) of the hit
                     Pose hitPose = hits[0].pose;
-                    // Spawn the cube at the hit position
                     SpawnCube(hitPose.position);
                 }
             }
         }
 
-        // If two cubes are present and a Line Renderer is assigned, update its positions.
-        if (cubes.Count == 2 && lineRenderer != null)
+        // When two cubes are present, instantiate the Line Renderer (if not already instantiated) and update its positions.
+        if (cubes.Count == 2)
         {
+            if (lineRenderer == null)
+            {
+                // Create a new GameObject to hold the Line Renderer component.
+                GameObject lineRendererObj = new GameObject("LineRendererObject");
+                lineRenderer = lineRendererObj.AddComponent<LineRenderer>();
+                // Optionally configure the Line Renderer.
+                lineRenderer.startWidth = 0.01f;
+                lineRenderer.endWidth = 0.01f;
+                // Use a basic material. You may assign a custom material if desired.
+                lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+            }
+
             lineRenderer.positionCount = 2;
             lineRenderer.SetPosition(0, cubes[0].transform.position);
             lineRenderer.SetPosition(1, cubes[1].transform.position);
         }
     }
 
-    // Spawns a cube at the given position and measures the distance if this is the second cube.
+    // Spawns a cube at the specified position. If two cubes exist, measures the distance between them.
     void SpawnCube(Vector3 position)
     {
         GameObject cube = Instantiate(cubePrefab, position, Quaternion.identity);
         cubes.Add(cube);
 
-        // When two cubes are present, measure the distance between them
+        // When two cubes are present, calculate the distance and update the TMP text.
         if (cubes.Count == 2)
         {
             float distance = Vector3.Distance(cubes[0].transform.position, cubes[1].transform.position);
@@ -68,26 +80,25 @@ public class ARCubeSpawner : MonoBehaviour
         }
     }
 
-    // Public method to reset the measurement (clear cubes, UI text, and line renderer).
+    // Public method to reset the measurement by destroying the cubes, resetting the text, and destroying the line renderer.
     public void ResetMeasurement()
     {
-        // Destroy all spawned cubes and clear the list
         foreach (GameObject cube in cubes)
         {
             Destroy(cube);
         }
         cubes.Clear();
 
-        // Reset the UI text display
         if (distanceText != null)
         {
             distanceText.text = "Distance: 0 m";
         }
 
-        // Clear the line renderer
         if (lineRenderer != null)
         {
-            lineRenderer.positionCount = 0;
+            Destroy(lineRenderer.gameObject);
+            lineRenderer = null;
         }
     }
 }
+
